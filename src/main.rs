@@ -38,7 +38,7 @@ fn setup(
     // Camera and Player
     let camera_entity = commands.spawn((
         Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 1.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+            transform: Transform::from_xyz(0.0, 1.7, 5.0).looking_at(Vec3::ZERO, Vec3::Y), // Set height to 1.7 meters
             ..Default::default()
         },
         Player, // Attach the Player component to the camera for simplicity
@@ -134,6 +134,7 @@ fn player_movement(
     mut query: Query<&mut Transform, With<Player>>,
 ) {
     let speed = 15.0; // Increased speed for faster movement
+    let height = 1.7; // Constant height
 
     for mut transform in query.iter_mut() {
         let mut direction = Vec3::ZERO;
@@ -141,11 +142,6 @@ fn player_movement(
         // Manually calculate forward and right vectors based on rotation
         let forward = transform.rotation * Vec3::Z;
         let right = transform.rotation * Vec3::X;
-
-        // Debugging: Output rotation and vectors
-        println!("Rotation: {:?}", transform.rotation);
-        println!("Forward: {:?}", forward);
-        println!("Right: {:?}", right);
 
         // Forward/Backward movement
         if keys.pressed(KeyCode::W) {
@@ -167,10 +163,7 @@ fn player_movement(
         if direction.length() > 0.0 {
             direction = direction.normalize();
             transform.translation += time.delta_seconds() * direction * speed;
-
-            // Debugging: Output movement direction and translation
-            println!("Movement Direction: {:?}", direction);
-            println!("New Translation: {:?}", transform.translation);
+            transform.translation.y = height; // Lock the Y position to maintain height
         }
     }
 }
