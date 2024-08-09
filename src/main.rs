@@ -48,16 +48,16 @@ fn setup(
     });
 
     // Ground with Grid Lines
-    let ground_size = 10.0;
+    let ground_size = 20.0;  // Increased the ground size
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: ground_size, subdivisions: 10 })),
+        mesh: meshes.add(Mesh::from(shape::Plane { size: ground_size, subdivisions: 20 })),
         material: materials.add(Color::rgb(0.2, 0.2, 0.2).into()), // Dark grey ground
         ..Default::default()
     });
 
     // Grid Lines
-    for i in 0..=10 {
-        let offset = i as f32 * (ground_size / 10.0) - (ground_size / 2.0);
+    for i in 0..=20 {
+        let offset = i as f32 * (ground_size / 20.0) - (ground_size / 2.0);
         // Vertical line
         commands.spawn(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Box::new(0.02, 0.02, ground_size))),
@@ -76,7 +76,7 @@ fn setup(
 
     // Walls
     let wall_thickness = 0.2;
-    let wall_height = 2.5;
+    let wall_height = 3.0;
     let half_size = ground_size / 2.0;
 
     // Four walls surrounding the ground
@@ -140,23 +140,32 @@ fn player_movement(
     for mut transform in query.iter_mut() {
         let mut direction = Vec3::ZERO;
 
+        // Forward/Backward movement along the player's facing direction
         if keys.pressed(KeyCode::W) {
-            direction.z -= 1.0;
+            direction += transform.forward();
         }
         if keys.pressed(KeyCode::S) {
-            direction.z += 1.0;
-        }
-        if keys.pressed(KeyCode::A) {
-            direction.x -= 1.0;
-        }
-        if keys.pressed(KeyCode::D) {
-            direction.x += 1.0;
+            direction -= transform.forward();
         }
 
-        let translation = &mut transform.translation;
-        *translation += time.delta_seconds() * direction * 5.0;
+        // Left/Right movement relative to the player's facing direction
+        if keys.pressed(KeyCode::A) {
+            direction -= transform.right();
+        }
+        if keys.pressed(KeyCode::D) {
+            direction += transform.right();
+        }
+
+        // Normalize the direction to ensure consistent movement speed
+        if direction.length() > 0.0 {
+            direction = direction.normalize();
+        }
+
+        // Apply the movement
+        transform.translation += time.delta_seconds() * direction * 5.0;
     }
 }
+
 
 fn mouse_look(
     mut mouse_motion_events: EventReader<MouseMotion>,
@@ -175,4 +184,3 @@ fn mouse_look(
             * transform.rotation;
     }
 }
-
