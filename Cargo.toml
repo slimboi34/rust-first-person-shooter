@@ -1,0 +1,8 @@
+[package]
+name = "bevy_fps"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = "0.11"  # Use the latest version available
+bevy_rapier3d = "0.23.0"  # For physics, if needed
