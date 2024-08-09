@@ -30,12 +30,16 @@ fn hide_cursor(mut window_query: Query<&mut Window, With<PrimaryWindow>>) {
     }
 }
 
-fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>, mut meshes: ResMut<Assets<Mesh>>) {
+fn setup(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
     // Camera
-    commands.spawn(Camera3dBundle {
+    let camera_entity = commands.spawn(Camera3dBundle {
         transform: Transform::from_xyz(0.0, 1.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..Default::default()
-    });
+    }).id();
 
     // Light
     commands.spawn(PointLightBundle {
@@ -43,10 +47,64 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>
         ..Default::default()
     });
 
-    // Ground
+    // Ground with Grid Lines
+    let ground_size = 10.0;
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 10.0, subdivisions: 0 })),
-        material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
+        mesh: meshes.add(Mesh::from(shape::Plane { size: ground_size, subdivisions: 10 })),
+        material: materials.add(Color::rgb(0.2, 0.2, 0.2).into()), // Dark grey ground
+        ..Default::default()
+    });
+
+    // Grid Lines
+    for i in 0..=10 {
+        let offset = i as f32 * (ground_size / 10.0) - (ground_size / 2.0);
+        // Vertical line
+        commands.spawn(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Box::new(0.02, 0.02, ground_size))),
+            material: materials.add(Color::rgb(1.0, 1.0, 1.0).into()), // White lines
+            transform: Transform::from_xyz(offset, 0.01, 0.0),
+            ..Default::default()
+        });
+        // Horizontal line
+        commands.spawn(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Box::new(ground_size, 0.02, 0.02))),
+            material: materials.add(Color::rgb(1.0, 1.0, 1.0).into()), // White lines
+            transform: Transform::from_xyz(0.0, 0.01, offset),
+            ..Default::default()
+        });
+    }
+
+    // Walls
+    let wall_thickness = 0.2;
+    let wall_height = 2.5;
+    let half_size = ground_size / 2.0;
+
+    // Four walls surrounding the ground
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Box::new(ground_size + wall_thickness, wall_height, wall_thickness))),
+        material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()), // Grey walls
+        transform: Transform::from_xyz(0.0, wall_height / 2.0, -half_size - wall_thickness / 2.0),
+        ..Default::default()
+    });
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Box::new(ground_size + wall_thickness, wall_height, wall_thickness))),
+        material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()), // Grey walls
+        transform: Transform::from_xyz(0.0, wall_height / 2.0, half_size + wall_thickness / 2.0),
+        ..Default::default()
+    });
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Box::new(wall_thickness, wall_height, ground_size + wall_thickness))),
+        material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()), // Grey walls
+        transform: Transform::from_xyz(-half_size - wall_thickness / 2.0, wall_height / 2.0, 0.0),
+        ..Default::default()
+    });
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Box::new(wall_thickness, wall_height, ground_size + wall_thickness))),
+        material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()), // Grey walls
+        transform: Transform::from_xyz(half_size + wall_thickness / 2.0, wall_height / 2.0, 0.0),
         ..Default::default()
     });
 
@@ -56,6 +114,22 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>
         GlobalTransform::default(),
         Player,
     ));
+
+    // Assault Rifle (a simple cuboid as a placeholder for the actual model)
+    let rifle_material = materials.add(Color::rgb(0.3, 0.3, 0.3).into());
+    let rifle_mesh = meshes.add(Mesh::from(shape::Box::new(0.1, 0.1, 0.5))); // Create a cuboid to represent the rifle
+
+    commands.spawn(PbrBundle {
+        mesh: rifle_mesh,
+        material: rifle_material,
+        transform: Transform {
+            translation: Vec3::new(0.3, -0.2, -0.5), // Position relative to the camera
+            rotation: Quat::from_rotation_x(std::f32::consts::PI / 2.0), // Rotate to align correctly
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .set_parent(camera_entity); // Attach the rifle to the camera
 }
 
 fn player_movement(
@@ -101,3 +175,4 @@ fn mouse_look(
             * transform.rotation;
     }
 }
+
