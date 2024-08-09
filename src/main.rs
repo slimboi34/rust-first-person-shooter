@@ -39,8 +39,8 @@ fn main() {
             ..Default::default()
         }))
         .insert_resource(MouseSettings {
-            sensitivity: 0.015,
-            smoothing: 0.1,
+            sensitivity: 0.01,  // Reduced sensitivity for finer control
+            smoothing: 0.2,     // Increased smoothing for more polished movement
         })
         .insert_resource(MovementSettings {
             base_speed: 15.0,
@@ -65,9 +65,9 @@ fn hide_cursor(mut window_query: Query<&mut Window, With<PrimaryWindow>>) {
     }
 }
 
-// Linear interpolation function for f32
-fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    a + t * (b - a)
+// Exponential smoothing function
+fn exp_smoothing(current: f32, target: f32, smoothing: f32) -> f32 {
+    current + (target - current) * smoothing
 }
 
 fn setup(
@@ -240,9 +240,9 @@ fn mouse_look(
         camera_state.target_pitch = camera_state.target_pitch.clamp(-pitch_limit, pitch_limit);
     }
 
-    // Smoothly interpolate to the target yaw and pitch
-    camera_state.yaw = lerp(camera_state.yaw, camera_state.target_yaw, mouse_settings.smoothing);
-    camera_state.pitch = lerp(camera_state.pitch, camera_state.target_pitch, mouse_settings.smoothing);
+    // Smoothly interpolate to the target yaw and pitch using exponential smoothing
+    camera_state.yaw = exp_smoothing(camera_state.yaw, camera_state.target_yaw, mouse_settings.smoothing);
+    camera_state.pitch = exp_smoothing(camera_state.pitch, camera_state.target_pitch, mouse_settings.smoothing);
 
     // Update the rotation based on the interpolated yaw and pitch
     for mut transform in query.iter_mut() {
