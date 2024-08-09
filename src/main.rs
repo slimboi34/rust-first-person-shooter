@@ -35,11 +35,14 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    // Camera
-    let camera_entity = commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 1.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..Default::default()
-    }).id();
+    // Camera and Player
+    let camera_entity = commands.spawn((
+        Camera3dBundle {
+            transform: Transform::from_xyz(0.0, 1.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+            ..Default::default()
+        },
+        Player, // Attach the Player component to the camera for simplicity
+    )).id();
 
     // Light
     commands.spawn(PointLightBundle {
@@ -108,13 +111,6 @@ fn setup(
         ..Default::default()
     });
 
-    // Player
-    commands.spawn((
-        Transform::default(),
-        GlobalTransform::default(),
-        Player,
-    ));
-
     // Assault Rifle (a simple cuboid as a placeholder for the actual model)
     let rifle_material = materials.add(Color::rgb(0.3, 0.3, 0.3).into());
     let rifle_mesh = meshes.add(Mesh::from(shape::Box::new(0.1, 0.1, 0.5))); // Create a cuboid to represent the rifle
@@ -137,50 +133,60 @@ fn player_movement(
     time: Res<Time>,
     mut query: Query<&mut Transform, With<Player>>,
 ) {
+    let speed = 15.0; // Increased speed for faster movement
+
     for mut transform in query.iter_mut() {
         let mut direction = Vec3::ZERO;
 
-        // Forward/Backward movement along the player's facing direction
+        // Manually calculate forward and right vectors based on rotation
+        let forward = transform.rotation * Vec3::Z;
+        let right = transform.rotation * Vec3::X;
+
+        // Debugging: Output rotation and vectors
+        println!("Rotation: {:?}", transform.rotation);
+        println!("Forward: {:?}", forward);
+        println!("Right: {:?}", right);
+
+        // Forward/Backward movement
         if keys.pressed(KeyCode::W) {
-            direction += transform.forward();
+            direction -= forward;
         }
         if keys.pressed(KeyCode::S) {
-            direction -= transform.forward();
+            direction += forward;
         }
 
-        // Left/Right movement relative to the player's facing direction
+        // Left/Right movement
         if keys.pressed(KeyCode::A) {
-            direction -= transform.right();
+            direction -= right;
         }
         if keys.pressed(KeyCode::D) {
-            direction += transform.right();
-        }
-
-        // Normalize the direction to ensure consistent movement speed
-        if direction.length() > 0.0 {
-            direction = direction.normalize();
+            direction += right;
         }
 
         // Apply the movement
-        transform.translation += time.delta_seconds() * direction * 5.0;
+        if direction.length() > 0.0 {
+            direction = direction.normalize();
+            transform.translation += time.delta_seconds() * direction * speed;
+
+            // Debugging: Output movement direction and translation
+            println!("Movement Direction: {:?}", direction);
+            println!("New Translation: {:?}", transform.translation);
+        }
     }
 }
-
 
 fn mouse_look(
     mut mouse_motion_events: EventReader<MouseMotion>,
     mut query: Query<&mut Transform, With<Player>>,
 ) {
-    let mut rotation = Vec2::ZERO;
+    let sensitivity = 0.001;
 
     for event in mouse_motion_events.iter() {
-        rotation += event.delta;
-    }
-
-    for mut transform in query.iter_mut() {
-        transform.rotation = Quat::from_axis_angle(Vec3::Y, rotation.x * 0.001)
-            * transform.rotation;
-        transform.rotation = Quat::from_axis_angle(Vec3::X, -rotation.y * 0.001)
-            * transform.rotation;
+        for mut transform in query.iter_mut() {
+            transform.rotation = Quat::from_axis_angle(Vec3::Y, event.delta.x * sensitivity)
+                * transform.rotation;
+            transform.rotation = Quat::from_axis_angle(Vec3::X, -event.delta.y * sensitivity)
+                * transform.rotation;
+        }
     }
 }
