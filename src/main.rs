@@ -135,6 +135,7 @@ fn player_movement(
 ) {
     let speed = 15.0; // Increased speed for faster movement
     let height = 1.7; // Constant height
+    let ground_size = 20.0; // Size of the ground
 
     for mut transform in query.iter_mut() {
         let mut direction = Vec3::ZERO;
@@ -162,7 +163,14 @@ fn player_movement(
         // Apply the movement
         if direction.length() > 0.0 {
             direction = direction.normalize();
-            transform.translation += time.delta_seconds() * direction * speed;
+            let new_translation = transform.translation + time.delta_seconds() * direction * speed;
+
+            // Collision detection: Ensure player doesn't move through the walls
+            let half_size = ground_size / 2.0 - 0.5; // Adjust for some buffer space
+            if new_translation.x > -half_size && new_translation.x < half_size &&
+               new_translation.z > -half_size && new_translation.z < half_size {
+                transform.translation = new_translation;
+            }
             transform.translation.y = height; // Lock the Y position to maintain height
         }
     }
