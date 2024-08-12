@@ -28,6 +28,16 @@ struct CameraState {
     target_pitch: f32,
 }
 
+#[derive(Resource)]
+struct WeaponSettings {
+    fire_rate: f32,
+}
+
+#[derive(Component)]
+struct Projectile {
+    velocity: Vec3,
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -39,8 +49,8 @@ fn main() {
             ..Default::default()
         }))
         .insert_resource(MouseSettings {
-            sensitivity: 0.01,  // Reduced sensitivity for finer control
-            smoothing: 0.2,     // Increased smoothing for more polished movement
+            sensitivity: 0.015,
+            smoothing: 0.1,
         })
         .insert_resource(MovementSettings {
             base_speed: 15.0,
@@ -52,8 +62,11 @@ fn main() {
             target_yaw: 0.0,
             target_pitch: 0.0,
         })
+        .insert_resource(WeaponSettings {
+            fire_rate: 10.0, // 10 shots per second
+        })
         .add_systems(Startup, (setup, hide_cursor))
-        .add_systems(Update, (player_movement, mouse_look))
+        .add_systems(Update, (player_movement, mouse_look, fire_weapon, move_projectiles))
         .run();
 }
 
@@ -65,9 +78,9 @@ fn hide_cursor(mut window_query: Query<&mut Window, With<PrimaryWindow>>) {
     }
 }
 
-// Exponential smoothing function
-fn exp_smoothing(current: f32, target: f32, smoothing: f32) -> f32 {
-    current + (target - current) * smoothing
+// Linear interpolation function for f32
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + t * (b - a)
 }
 
 fn setup(
@@ -240,12 +253,63 @@ fn mouse_look(
         camera_state.target_pitch = camera_state.target_pitch.clamp(-pitch_limit, pitch_limit);
     }
 
-    // Smoothly interpolate to the target yaw and pitch using exponential smoothing
-    camera_state.yaw = exp_smoothing(camera_state.yaw, camera_state.target_yaw, mouse_settings.smoothing);
-    camera_state.pitch = exp_smoothing(camera_state.pitch, camera_state.target_pitch, mouse_settings.smoothing);
+    // Smoothly interpolate to the target yaw and pitch
+    camera_state.yaw = lerp(camera_state.yaw, camera_state.target_yaw, mouse_settings.smoothing);
+    camera_state.pitch = lerp(camera_state.pitch, camera_state.target_pitch, mouse_settings.smoothing);
 
     // Update the rotation based on the interpolated yaw and pitch
     for mut transform in query.iter_mut() {
         transform.rotation = Quat::from_rotation_y(camera_state.yaw) * Quat::from_rotation_x(camera_state.pitch);
+    }
+}
+
+fn fire_weapon(
+    mouse_button_input: Res<Input<MouseButton>>,
+    time: Res<Time>,
+    weapon_settings: Res<WeaponSettings>,
+    mut last_shot_time: Local<f32>,
+    mut commands: Commands,
+    query: Query<&Transform, With<Player>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    if mouse_button_input.pressed(MouseButton::Left) && (*last_shot_time + 1.0 / weapon_settings.fire_rate) <= time.elapsed_seconds() {
+        *last_shot_time = time.elapsed_seconds();
+
+        if let Ok(player_transform) = query.get_single() {
+            let spawn_transform = Transform {
+                translation: player_transform.translation + player_transform.rotation * Vec3::new(0.0, 0.0, -1.0),
+                rotation: player_transform.rotation,
+                ..Default::default()
+            };
+
+            // Spawn a projectile using UVSphere instead of Icosphere
+            commands.spawn((
+                PbrBundle {
+                    mesh: meshes.add(Mesh::from(shape::UVSphere { radius: 0.05, sectors: 16, stacks: 16 })),
+                    material: materials.add(Color::rgb(1.0, 0.0, 0.0).into()), // Red projectile
+                    transform: spawn_transform,
+                    ..Default::default()
+                },
+                Projectile {
+                    velocity: player_transform.rotation * Vec3::new(0.0, 0.0, -30.0), // Set the speed of the projectile
+                },
+            ));
+        }
+    }
+}
+
+fn move_projectiles(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Transform, &Projectile)>,
+) {
+    for (entity, mut transform, projectile) in query.iter_mut() {
+        transform.translation += projectile.velocity * time.delta_seconds();
+
+        // Despawn the projectile after it moves beyond a certain distance
+        if transform.translation.length() > 50.0 {
+            commands.entity(entity).despawn();
+        }
     }
 }
