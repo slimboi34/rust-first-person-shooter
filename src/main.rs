@@ -38,6 +38,14 @@ struct Projectile {
     velocity: Vec3,
 }
 
+#[derive(Component)]
+struct Collider {
+    half_extents: Vec3,
+}
+
+#[derive(Component)]
+struct Explosion;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -66,7 +74,7 @@ fn main() {
             fire_rate: 10.0, // 10 shots per second
         })
         .add_systems(Startup, (setup, hide_cursor))
-        .add_systems(Update, (player_movement, mouse_look, fire_weapon, move_projectiles))
+        .add_systems(Update, (player_movement, mouse_look, fire_weapon, move_projectiles, check_collisions))
         .run();
 }
 
@@ -105,11 +113,16 @@ fn setup(
 
     // Ground with Grid Lines
     let ground_size = 20.0;  // Increased the ground size
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: ground_size, subdivisions: 20 })),
-        material: materials.add(Color::rgb(0.2, 0.2, 0.2).into()), // Dark grey ground
-        ..Default::default()
-    });
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Plane { size: ground_size, subdivisions: 20 })),
+            material: materials.add(Color::rgb(0.2, 0.2, 0.2).into()), // Dark grey ground
+            ..Default::default()
+        },
+        Collider {
+            half_extents: Vec3::new(ground_size / 2.0, 0.1, ground_size / 2.0),
+        },
+    ));
 
     // Grid Lines
     for i in 0..=20 {
@@ -136,33 +149,53 @@ fn setup(
     let half_size = ground_size / 2.0;
 
     // Four walls surrounding the ground
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Box::new(ground_size + wall_thickness, wall_height, wall_thickness))),
-        material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()), // Grey walls
-        transform: Transform::from_xyz(0.0, wall_height / 2.0, -half_size - wall_thickness / 2.0),
-        ..Default::default()
-    });
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Box::new(ground_size + wall_thickness, wall_height, wall_thickness))),
+            material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()), // Grey walls
+            transform: Transform::from_xyz(0.0, wall_height / 2.0, -half_size - wall_thickness / 2.0),
+            ..Default::default()
+        },
+        Collider {
+            half_extents: Vec3::new((ground_size + wall_thickness) / 2.0, wall_height / 2.0, wall_thickness / 2.0),
+        },
+    ));
 
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Box::new(ground_size + wall_thickness, wall_height, wall_thickness))),
-        material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()), // Grey walls
-        transform: Transform::from_xyz(0.0, wall_height / 2.0, half_size + wall_thickness / 2.0),
-        ..Default::default()
-    });
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Box::new(ground_size + wall_thickness, wall_height, wall_thickness))),
+            material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()), // Grey walls
+            transform: Transform::from_xyz(0.0, wall_height / 2.0, half_size + wall_thickness / 2.0),
+            ..Default::default()
+        },
+        Collider {
+            half_extents: Vec3::new((ground_size + wall_thickness) / 2.0, wall_height / 2.0, wall_thickness / 2.0),
+        },
+    ));
 
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Box::new(wall_thickness, wall_height, ground_size + wall_thickness))),
-        material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()), // Grey walls
-        transform: Transform::from_xyz(-half_size - wall_thickness / 2.0, wall_height / 2.0, 0.0),
-        ..Default::default()
-    });
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Box::new(wall_thickness, wall_height, ground_size + wall_thickness))),
+            material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()), // Grey walls
+            transform: Transform::from_xyz(-half_size - wall_thickness / 2.0, wall_height / 2.0, 0.0),
+            ..Default::default()
+        },
+        Collider {
+            half_extents: Vec3::new(wall_thickness / 2.0, wall_height / 2.0, (ground_size + wall_thickness) / 2.0),
+        },
+    ));
 
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Box::new(wall_thickness, wall_height, ground_size + wall_thickness))),
-        material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()), // Grey walls
-        transform: Transform::from_xyz(half_size + wall_thickness / 2.0, wall_height / 2.0, 0.0),
-        ..Default::default()
-    });
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Box::new(wall_thickness, wall_height, ground_size + wall_thickness))),
+            material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()), // Grey walls
+            transform: Transform::from_xyz(half_size + wall_thickness / 2.0, wall_height / 2.0, 0.0),
+            ..Default::default()
+        },
+        Collider {
+            half_extents: Vec3::new(wall_thickness / 2.0, wall_height / 2.0, (ground_size + wall_thickness) / 2.0),
+        },
+    ));
 
     // Assault Rifle (a simple cuboid as a placeholder for the actual model)
     let rifle_material = materials.add(Color::rgb(0.3, 0.3, 0.3).into());
@@ -298,18 +331,120 @@ fn fire_weapon(
         }
     }
 }
-
 fn move_projectiles(
     time: Res<Time>,
     mut commands: Commands,
-    mut query: Query<(Entity, &mut Transform, &Projectile)>,
+    mut param_set: ParamSet<(
+        Query<(Entity, &mut Transform, &Projectile)>,
+        Query<(&Transform, &Collider)>,
+    )>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    for (entity, mut transform, projectile) in query.iter_mut() {
-        transform.translation += projectile.velocity * time.delta_seconds();
+    let mut despawn_entities = vec![];
+    let mut explosions = vec![];
 
-        // Despawn the projectile after it moves beyond a certain distance
+    // Collect projectile data
+    let projectiles: Vec<_> = param_set.p0().iter_mut().map(|(entity, mut transform, projectile)| {
+        let new_translation = transform.translation + projectile.velocity * time.delta_seconds();
+        transform.translation = new_translation;
+
         if transform.translation.length() > 50.0 {
-            commands.entity(entity).despawn();
+            despawn_entities.push(entity);
+        }
+
+        (entity, transform.translation)
+    }).collect();
+
+    // Collect collider data
+    let colliders: Vec<_> = param_set.p1().iter().map(|(transform, collider)| {
+        (transform.translation, collider.half_extents)
+    }).collect();
+
+    // Check for collisions
+    for (entity, translation) in projectiles {
+        for (collider_translation, collider_half_extents) in &colliders {
+            if check_aabb_collision(
+                translation,
+                Vec3::splat(0.05), // Projectile radius as half extents
+                *collider_translation,
+                *collider_half_extents,
+            ) {
+                despawn_entities.push(entity);
+
+                // Create a new explosion effect
+                explosions.push((translation, Transform::from_translation(translation)));
+                break; // Stop checking other colliders
+            }
+        }
+    }
+
+    for (explosion_translation, transform) in explosions {
+        // Create a new explosion mesh and material
+        let explosion_mesh = meshes.add(Mesh::from(shape::UVSphere { radius: 0.3, sectors: 16, stacks: 16 }));
+        let explosion_material = materials.add(StandardMaterial {
+            base_color: Color::rgb(1.0, 0.5, 0.0),
+            ..Default::default()
+        });
+
+        // Spawn the explosion effect
+        commands.spawn(PbrBundle {
+            mesh: explosion_mesh,
+            material: explosion_material,
+            transform,
+            ..Default::default()
+        });
+    }
+
+    for entity in despawn_entities {
+        commands.entity(entity).despawn();
+    }
+}
+
+// Dummy function for collision detection (replace with actual collision detection logic)
+fn check_aabb_collision(
+    pos1: Vec3,
+    half_extents1: Vec3,
+    pos2: Vec3,
+    half_extents2: Vec3,
+) -> bool {
+    // AABB collision detection logic
+    let delta = pos1 - pos2;
+    let intersect_x = delta.x.abs() <= half_extents1.x + half_extents2.x;
+    let intersect_y = delta.y.abs() <= half_extents1.y + half_extents2.y;
+    let intersect_z = delta.z.abs() <= half_extents1.z + half_extents2.z;
+    intersect_x && intersect_y && intersect_z
+}
+
+
+
+fn check_collisions(
+    mut commands: Commands,
+    projectile_query: Query<(Entity, &Transform), With<Projectile>>,
+    collider_query: Query<(Entity, &Transform), Without<Projectile>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    for (projectile_entity, projectile_transform) in projectile_query.iter() {
+        for (_collider_entity, collider_transform) in collider_query.iter() {
+            let distance = projectile_transform.translation.distance(collider_transform.translation);
+            if distance < 0.1 { // Collision threshold
+                // Despawn the projectile
+                commands.entity(projectile_entity).despawn();
+
+                // Spawn an explosion
+                commands.spawn((
+                    PbrBundle {
+                        mesh: meshes.add(Mesh::from(shape::UVSphere { radius: 0.3, sectors: 16, stacks: 16 })),
+                        material: materials.add(Color::rgb(1.0, 0.5, 0.0).into()), // Orange explosion
+                        transform: *projectile_transform,
+                        ..Default::default()
+                    },
+                    Explosion,
+                ));
+
+                // You can add more effects like a sound or particles here if desired
+            }
         }
     }
 }
