@@ -111,6 +111,29 @@ fn setup(
         ..Default::default()
     });
 
+    // Ground, walls, and other setup code omitted for brevity...
+
+    // Rifle (a simple cuboid as a placeholder for the actual model)
+    let rifle_material = materials.add(Color::rgb(0.3, 0.3, 0.3).into());
+    let rifle_mesh = meshes.add(Mesh::from(shape::Box::new(0.1, 0.1, 0.5))); // Create a cuboid to represent the rifle
+
+    // Position the rifle in front of the camera, centered horizontally, and rotated to face forward
+    commands.spawn((
+        PbrBundle {
+            mesh: rifle_mesh,
+            material: rifle_material,
+            transform: Transform {
+                translation: Vec3::new(0.0, -0.2, -0.6), // Centered on the X-axis, slight downwards Y, forward Z
+                rotation: Quat::from_rotation_y(0.0), // No additional rotation needed if it's already facing forward
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    ))
+    .set_parent(camera_entity); // Attach the rifle to the camera
+}
+
+
     // Ground with Grid Lines
     let ground_size = 20.0;  // Increased the ground size
     commands.spawn((
